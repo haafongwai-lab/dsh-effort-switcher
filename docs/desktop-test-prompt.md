@@ -18,7 +18,7 @@
 
 ### 1. 背景
 
-- 插件仓库：`https://github.com/lemonorangeapple/dsh-effort-switcher`，分支 `ccr-012fe003-4ij2vd`。
+- 插件仓库：`https://github.com/haafongwai-lab/dsh-effort-switcher`，分支 `master`。
 - 插件作用：把输入框里的模型座位（插槽 `conversation.input.model`，优先级 -100）整体替换为「模型名 + 推理强度」触发器，点开后是一个推理强度滑条（档位：Off / Low / High / Max）。滑条通过 DSH 的 `modelDirectories` 服务写入当前模型的 `reasoningEffort`。
 - 已修复的两个问题，**需要在桌面端确认是否真的消失**：
   1. **圆角方块**：DSH 0.1.2 起主题为所有元素设置 `corner-shape: superellipse(1.5)`，旋钮、轨道、刻度点被画成圆角方块。插件现对这些部件显式写了 `corner-shape: round`。
@@ -39,9 +39,9 @@
 1. 记录环境：操作系统及版本、DSH 桌面端版本（应用菜单 **About DeepSeek Harness**）、是否为正式安装包。
 2. 把插件克隆到本机一个固定路径（路径里最好没有空格），切到分支并记录提交：
    ```
-   git clone https://github.com/lemonorangeapple/dsh-effort-switcher <本地路径>
+   git clone https://github.com/haafongwai-lab/dsh-effort-switcher <本地路径>
    cd <本地路径>
-   git checkout ccr-012fe003-4ij2vd
+   git checkout master
    git rev-parse HEAD
    ```
 3. 可选：`node --version` 在 18 以上时运行 `npm test`，应输出 `all checks passed`。失败就记录输出，但**不要因此停止**桌面端实测。

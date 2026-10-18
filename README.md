@@ -35,7 +35,7 @@
 **Web profile**（从 GitHub 安装）：
 
 ```powershell
-dsh plugin --profile web add github:lemonorangeapple/dsh-effort-switcher
+dsh plugin --profile web add github:haafongwai-lab/dsh-effort-switcher
 ```
 
 命令会把本包装进当前 Web profile，并因 `dsh.bundle` 声明自动写入 `dsh.profile.bundles`，不必再手工编辑 profile 的 `cordis.patch.yml`。
