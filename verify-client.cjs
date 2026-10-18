@@ -113,24 +113,43 @@ const snapshot = {
                     { id: "medium", name: "中" }
                 ]
             }
-        }]
-    }, {
-        id: "deepseek-official",
-        name: "DeepSeek",
-        models: [{
-            id: "DeepSeek-V4-Flash",
-            name: "DeepSeek-V4-Flash",
-            description: "官方 DeepSeek 路由"
         }, {
-            id: "DeepSeek-V4-Pro",
-            name: "DeepSeek-V4-Pro",
-            description: "官方 DeepSeek 路由"
-        }, {
-            id: "deepseek-v4-flash-vision-exp",
-            name: "DeepSeek-V4-Flash-Vision-Exp",
-            description: "官方 DeepSeek 视觉路由"
+            // Same id and name as the official 1017 entry, but not an official
+            // route: the marker must stay off.
+            id: "deepseek-flash",
+            name: "DeepSeek-V4.1-Flash",
+            description: "非官方同名路由"
         }]
-    }, {
+        }, {
+            id: "deepseek-official",
+            name: "DeepSeek",
+            models: [{
+                id: "DeepSeek-V4-Flash",
+                name: "DeepSeek-V4-Flash",
+                description: "官方 DeepSeek 路由"
+            }, {
+                id: "DeepSeek-V4-Pro",
+                name: "DeepSeek-V4-Pro",
+                description: "官方 DeepSeek 路由"
+            }, {
+                id: "deepseek-v4-flash-vision-exp",
+                name: "DeepSeek-V4-Flash-Vision-Exp",
+                description: "官方 DeepSeek 视觉路由"
+            }, {
+                id: "deepseek-flash",
+                name: "DeepSeek-V4.1-Flash"
+            }, {
+                id: "deepseek-flash-fast",
+                name: "DeepSeek-V4.1-Flash-Fast"
+            }]
+        }, {
+            id: "deepseek-account",
+            name: "DeepSeek Account",
+            models: [{
+                id: "deepseek-flash",
+                name: "DeepSeek-V4.1-Flash"
+            }]
+        }, {
         id: "xiaomi",
         name: "Xiaomi",
         models: [{
@@ -247,6 +266,11 @@ if (!styleTag.textContent.includes("dsh-es-pop")) throw new Error("pop animation
 if (!styleTag.textContent.includes("height: 26px")) throw new Error("slider track must be 26px tall");
 if (!styleTag.textContent.includes("width: 30px")) throw new Error("slider thumb must be 30px wide");
 if (!styleTag.textContent.includes(".dsh-es-sliderKnob")) throw new Error("custom thumb knob missing");
+// The light theme's track is nearly white, so the white knob needs a shadow to
+// stay visible outside the filled span.
+if (!/\.dsh-es-sliderKnobFace\s*\{[^}]*box-shadow:\s*0 1px/.test(styleTag.textContent)) {
+    throw new Error("the knob must keep a shadow so it stays visible on the light theme track");
+}
 if (!styleTag.textContent.includes("transition: left .315s ease")) throw new Error("thumb must ease between notches at the last-notch pace");
 if (!styleTag.textContent.includes("transition: width .315s ease")) {
     throw new Error("fill must ease with the thumb at the last-notch pace");
@@ -267,7 +291,7 @@ if (!styleTag.textContent.includes("linear-gradient(90deg, #4c8dff 0%, #7b6cff 5
 // DSH 0.1.2+ sets corner-shape: superellipse(1.5) on every element, which turns
 // border-radius circles into rounded squares. Every round part of the slider must
 // opt back out with corner-shape: round (pseudo-element thumbs are transparent).
-const cssRules = [...styleTag.textContent.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: m[1].trim(), body: m[2] }));
+const cssRules = [...styleTag.textContent.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: m[1].trim(), body: m[2] }));
 const sliderRoundRules = cssRules.filter((rule) => /\.dsh-es-slider(Groove|Track|Fill|KnobFace|Tick)\b/.test(rule.selector) && !rule.selector.includes("::"));
 if (sliderRoundRules.length < 4) throw new Error(`expected rules for groove/track/fill/knob/tick, found ${sliderRoundRules.length}`);
 for (const rule of sliderRoundRules) {
@@ -307,6 +331,39 @@ for (const rule of cssRules) {
     if (/(^|;)\s*background:\s*var\(--dsw-specific-menu\)/.test(rule.body)) {
         throw new Error(`${rule.selector.split("\n").pop()} uses the translucent menu fill directly`);
     }
+}
+// Model names must never be cut short by the description sharing their row, and
+// the picker window must be wide enough to show them.
+const modelMenuWidthRule = cssRules.find((rule) => rule.selector === ".dsh-es-modelMenu");
+if (!modelMenuWidthRule || !/width:\s*min\(320px/.test(modelMenuWidthRule.body)) {
+    throw new Error("the model window must be wide enough for full model names");
+}
+const modelItemNameRule = cssRules.find((rule) => rule.selector === ".dsh-es-menuItemName");
+if (!modelItemNameRule) throw new Error("model name span rule missing");
+if (!/flex:\s*0 1 auto/.test(modelItemNameRule.body)) {
+    throw new Error("the model name must not shrink alongside the description");
+}
+if (!/display:\s*inline-flex/.test(modelItemNameRule.body)) {
+    throw new Error("the model name must lay out its text and badge on one line");
+}
+const modelItemTextRule = cssRules.find((rule) => rule.selector === ".dsh-es-menuItemText");
+if (!modelItemTextRule || !/text-overflow:\s*ellipsis/.test(modelItemTextRule.body)) {
+    throw new Error("the model name text must ellipsize when it alone is wider than the window");
+}
+const modelBadgeRule = cssRules.find((rule) => rule.selector === ".dsh-es-modelBadge");
+if (!modelBadgeRule) throw new Error("1017 badge rule missing");
+if (!/background:\s*var\(--dsw-alias-state-info-tertiary/.test(modelBadgeRule.body)) {
+    throw new Error("the 1017 badge must prefer the host's info tone");
+}
+if (!/var\(--dsw-static-deepseek-100/.test(modelBadgeRule.body)) {
+    throw new Error("the 1017 badge must fall back to the light blue ramp");
+}
+if (!/flex:\s*none/.test(modelBadgeRule.body)) {
+    throw new Error("the 1017 badge must never be squeezed by a long name");
+}
+const modelItemDescRule = cssRules.find((rule) => rule.selector === ".dsh-es-menuItemDesc");
+if (!modelItemDescRule || !/flex:\s*1 1 0/.test(modelItemDescRule.body)) {
+    throw new Error("the description must absorb the row's shrink instead of the model name");
 }
 // The trigger and menu keep following the host's corner style.
 for (const rule of cssRules) {
@@ -352,6 +409,16 @@ function text(node) {
     if (Array.isArray(node)) return node.map(text).join("");
     if (typeof node !== "object") return "";
     return (node.children ?? []).map(text).join("");
+}
+function collect(node, predicate, out = []) {
+    if (Array.isArray(node)) {
+        for (const child of node) collect(child, predicate, out);
+        return out;
+    }
+    if (node === null || typeof node !== "object") return out;
+    if (predicate(node)) out.push(node);
+    for (const child of node.children ?? []) collect(child, predicate, out);
+    return out;
 }
 
 // 1. Config must validate (client runner check)
@@ -432,6 +499,12 @@ if (modelList) throw new Error("model list must not be inline in the main panel"
 
 const menuText = text(menu);
 if (!menuText.includes("模型")) throw new Error("model row label missing");
+// The selected model's full name must stay reachable even if the row clips it.
+const modelRowValue = find(modelRow, (n) => n.props?.className === "dsh-es-modelRowValue");
+if (!modelRowValue) throw new Error("model row value missing");
+if (modelRowValue.props.title !== "Reasoning Model") {
+    throw new Error(`model row must expose the full name as a tooltip, got ${JSON.stringify(modelRowValue.props.title)}`);
+}
 // The model row's trailing glyph must be the DSH chevron-right SVG, not text.
 const modelRowChevron = find(modelRow, (n) => n.props?.className === "dsh-es-chevron");
 if (!modelRowChevron || modelRowChevron.type !== "svg") {
@@ -472,6 +545,39 @@ if (deepseekItem.props.disabled === true || deepseekItem.props["aria-disabled"] 
 if (find(deepseekItem, (n) => n.props?.className === "dsh-es-menuItemNotice")) {
     throw new Error("image notice must stay hidden until the current session has images");
 }
+// The name owns its own span so the description cannot squeeze it, and the full
+// name stays readable as a tooltip.
+const modelNameSpan = deepseekItem.children.find((child) => child?.props?.className === "dsh-es-menuItemName");
+if (!modelNameSpan) throw new Error("model item must render its name in a dedicated non-shrinking span");
+if (text(modelNameSpan) !== "DeepSeek-V4-Flash") {
+    throw new Error(`model item must render the full name, got ${JSON.stringify(text(modelNameSpan))}`);
+}
+if (deepseekItem.children.some((child) => child?.props?.className === "dsh-es-triggerLabel")) {
+    throw new Error("model items must not reuse the shrinking trigger label class");
+}
+if (!String(deepseekItem.props.title ?? "").includes("DeepSeek-V4-Flash")) {
+    throw new Error("model item must expose the full name as a tooltip");
+}
+
+// The 1017 release marker follows the host plugin's rule: official routes only,
+// model id deepseek-flash, exact catalog name DeepSeek-V4.1-Flash.
+const menuButtons = collect(modelMenu, (node) => node.props?.type === "button");
+const itemName = (item) => text(find(item, (child) => child.props?.className === "dsh-es-menuItemText") ?? {});
+const badgeOf = (item) => find(item, (child) => child.props?.className === "dsh-es-modelBadge");
+const flashItems = menuButtons.filter((item) => itemName(item) === "DeepSeek-V4.1-Flash");
+if (flashItems.length !== 3) {
+    throw new Error(`expected the two official Flash entries plus the non-official decoy, got ${flashItems.length}`);
+}
+const badgedFlash = flashItems.filter((item) => badgeOf(item) !== undefined);
+if (badgedFlash.length !== 2) {
+    throw new Error(`only deepseek-official and deepseek-account may carry the 1017 marker, got ${badgedFlash.length}`);
+}
+for (const item of badgedFlash) {
+    if (text(badgeOf(item)) !== "1017") throw new Error("badge copy must be 1017");
+}
+const fastItem = menuButtons.find((item) => itemName(item) === "DeepSeek-V4.1-Flash-Fast");
+if (!fastItem) throw new Error("the Flash-Fast entry must stay listed");
+if (badgeOf(fastItem) !== undefined) throw new Error("DeepSeek-V4.1-Flash-Fast is not the 1017 build");
 
 function renderWithDraftImages() {
     beginRender();

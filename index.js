@@ -74,7 +74,7 @@ window.__ModuleLoader__.load({
     z-index: 9999;
     border: 1px solid var(--dsw-alias-border-inverted);
     background: var(--dsh-es-panel-bg);
-    width: min(240px, calc(100vw - 32px));
+    width: min(260px, calc(100vw - 32px));
     max-height: min(380px, calc(100vh - 96px));
     box-shadow: var(--dsw-shadow-lv3);
     color: var(--dsw-alias-label-primary);
@@ -142,7 +142,7 @@ window.__ModuleLoader__.load({
     z-index: 10000;
     border: 1px solid var(--dsw-alias-border-inverted);
     background: var(--dsh-es-panel-bg);
-    width: min(220px, calc(100vw - 32px));
+    width: min(320px, calc(100vw - 32px));
     max-height: min(240px, calc(100vh - 96px));
     box-shadow: var(--dsw-shadow-lv3);
     color: var(--dsw-alias-label-primary);
@@ -224,12 +224,44 @@ window.__ModuleLoader__.load({
     white-space: normal;
     pointer-events: none;
 }
+/* The name owns its width; the trailing description is the only thing that
+   yields when a row runs out of space, so model names are never cut short by
+   their own description (flex-basis 0 means the description also collapses
+   before the name ellipsizes). */
+.dsh-es-menuItemName {
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    flex: 0 1 auto;
+    display: inline-flex;
+}
+.dsh-es-menuItemText {
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    overflow: hidden;
+}
+/* Fixed release marker for the official DeepSeek Flash 1017 build. The static
+   blue ramp keeps it a light chip in both themes; the semantic info tokens win
+   when the host provides them. */
+.dsh-es-modelBadge {
+    flex: none;
+    padding: 0 4px;
+    border-radius: var(--dsw-radius-sm, 6px);
+    background: var(--dsw-alias-state-info-tertiary, var(--dsw-static-deepseek-100, #e4edfd));
+    color: var(--dsw-alias-state-info-primary, var(--dsw-static-deepseek-600, #4868b2));
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 14px;
+}
 .dsh-es-menuItemDesc {
     color: var(--dsw-alias-label-caption);
     font-size: 11px;
     line-height: 15px;
     text-overflow: ellipsis;
     white-space: nowrap;
+    min-width: 0;
+    flex: 1 1 0;
     overflow: hidden;
 }
 .dsh-es-menuStatus, .dsh-es-menuEmpty {
@@ -335,7 +367,9 @@ window.__ModuleLoader__.load({
     corner-shape: round;
     border-radius: 50%;
     background: #ffffff;
-    box-shadow: none;
+    /* The track is nearly white in the light theme, so a flat white knob would
+       disappear outside the filled span. */
+    box-shadow: 0 1px 4px rgb(0 0 0 / 22%), 0 0 0 1px rgb(0 0 0 / 5%);
 }
 .dsh-es-sliderTicks {
     position: absolute;
@@ -494,6 +528,22 @@ window.__ModuleLoader__.load({
         const ICON_WARNING_RING = "M12.6328 6.99976C12.6328 3.88874 10.111 1.36694 7 1.36694C3.88899 1.36695 1.3672 3.88875 1.36719 6.99976C1.36719 10.1108 3.88899 12.6326 7 12.6326C10.111 12.6326 12.6328 10.1108 12.6328 6.99976ZM13.8582 6.99976C13.8582 10.7873 10.7876 13.8579 7 13.8579C3.21244 13.8579 0.141846 10.7873 0.141846 6.99976C0.141857 3.2122 3.21245 0.141612 7 0.141602C10.7876 0.141602 13.8581 3.21219 13.8582 6.99976Z";
         const IMAGE_BLOCK_REASON = "当前草稿包含图片，此模型不支持图片输入";
         const DEEPSEEK_FLASH_VISION_EXP_MODEL = "deepseek-v4-flash-vision-exp";
+
+        // Mirrors @deepseek-ai/dsh-client-ui-deepseek-model-label-1017, whose
+        // label sub-slot this plugin replaces: the 1017 marker is fixed client
+        // presentation for the official Flash release, keyed on the provider,
+        // the model id, and the exact catalog name. `-Fast` and any other
+        // catalog entry deliberately stay unmarked.
+        const DEEPSEEK_1017_PROVIDERS = new Set(["deepseek-official", "deepseek-account"]);
+        const DEEPSEEK_1017_MODEL_ID = "deepseek-flash";
+        const DEEPSEEK_1017_MODEL_NAME = "DeepSeek-V4.1-Flash";
+        const DEEPSEEK_1017_LABEL = "1017";
+
+        function isDeepSeek1017(provider, model) {
+            return DEEPSEEK_1017_PROVIDERS.has(provider)
+                && model.id === DEEPSEEK_1017_MODEL_ID
+                && model.name === DEEPSEEK_1017_MODEL_NAME;
+        }
 
         const chevronIcon = (path, className) => react.createElement(
             "svg",
@@ -727,10 +777,18 @@ window.__ModuleLoader__.load({
                                         active ? "dsh-es-menuItemActive" : "",
                                         blocked ? "dsh-es-menuItemBlocked" : ""
                                     ].filter(Boolean).join(" "),
+                                    title: model.description === void 0 ? model.name : `${model.name} — ${model.description}`,
                                     "aria-disabled": blocked,
                                     onClick: () => chooseModel(group, model)
                                 },
-                                react.createElement("span", { className: "dsh-es-triggerLabel" }, model.name),
+                                react.createElement(
+                                    "span",
+                                    { className: "dsh-es-menuItemName" },
+                                    react.createElement("span", { className: "dsh-es-menuItemText" }, model.name),
+                                    isDeepSeek1017(group.id, model)
+                                        ? react.createElement("span", { className: "dsh-es-modelBadge" }, DEEPSEEK_1017_LABEL)
+                                        : null
+                                ),
                                 warned
                                     ? react.createElement(
                                         "span",
@@ -876,7 +934,10 @@ window.__ModuleLoader__.load({
                         onClick: () => setModelsOpen((value) => !value)
                     },
                     react.createElement("span", { className: "dsh-es-modelRowLabel" }, "模型"),
-                    react.createElement("span", { className: "dsh-es-modelRowValue" }, currentChoice?.model.name ?? "—"),
+                    react.createElement("span", {
+                        className: "dsh-es-modelRowValue",
+                        title: currentChoice?.model.name ?? void 0
+                    }, currentChoice?.model.name ?? "—"),
                     chevronIcon(ICON_CHEVRON_RIGHT, "dsh-es-chevron")
                 ),
                 slider === null
