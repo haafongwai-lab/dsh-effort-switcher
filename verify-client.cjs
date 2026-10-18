@@ -291,7 +291,31 @@ if (!styleTag.textContent.includes("linear-gradient(90deg, #4c8dff 0%, #7b6cff 5
 // DSH 0.1.2+ sets corner-shape: superellipse(1.5) on every element, which turns
 // border-radius circles into rounded squares. Every round part of the slider must
 // opt back out with corner-shape: round (pseudo-element thumbs are transparent).
-const cssRules = [...styleTag.textContent.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: m[1].trim(), body: m[2] }));
+// @supports blocks are flattened into their inner selectors, otherwise the flat
+// rule scanner below cannot see them ("@supports (x) { .a {} }" ->
+// "@supports (x) .a {}"), and the glass rules would slip past unchecked.
+// Comments go first: the word @supports also appears in prose.
+function flattenAtSupports(css) {
+    let out = "";
+    let cursor = 0;
+    for (;;) {
+        const start = css.indexOf("@supports", cursor);
+        if (start < 0) break;
+        const open = css.indexOf("{", start);
+        if (open < 0) break;
+        let depth = 1;
+        let end = open + 1;
+        while (end < css.length && depth > 0) {
+            if (css[end] === "{") depth++;
+            else if (css[end] === "}") depth--;
+            end++;
+        }
+        out += css.slice(cursor, open) + css.slice(open + 1, end - 1);
+        cursor = end;
+    }
+    return out + css.slice(cursor);
+}
+const cssRules = [...flattenAtSupports(styleTag.textContent.replace(/\/\*[\s\S]*?\*\//g, "")).matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: m[1].trim(), body: m[2] }));
 const sliderRoundRules = cssRules.filter((rule) => /\.dsh-es-slider(Groove|Track|Fill|KnobFace|Tick)\b/.test(rule.selector) && !rule.selector.includes("::"));
 if (sliderRoundRules.length < 4) throw new Error(`expected rules for groove/track/fill/knob/tick, found ${sliderRoundRules.length}`);
 for (const rule of sliderRoundRules) {
@@ -317,15 +341,38 @@ for (const rule of cssRules) {
     if (rule.selector.startsWith("@") || !/^\.dsh-es-/.test(rule.selector)) continue;
     throw new Error(`${rule.selector} uses a fixed border-radius (${radius}); use a --dsw-radius-* token with a fallback`);
 }
-// Panels are opaque. DSH 0.2's --dsw-specific-menu is a translucent glass fill, so every
-// panel paints it over the opaque page background instead of using it on its own.
+// Panels ship opaque, so a host that only offers a translucent fill (no backdrop
+// to blur) still gets a readable panel. The host's frosted glass is layered on
+// top: translucent fill plus its own backdrop filter, same tokens the host menus
+// use (Windows/Linux: rgba(248,249,250,.58) + blur(40px) saturate(150%)).
 const panelRoot = cssRules.find((rule) => rule.selector.endsWith(".dsh-es-root"));
-if (!panelRoot || !/--dsh-es-panel-bg:[^;]*var\(--dsw-specific-menu\)[^;]*var\(--dsw-alias-bg-base/.test(panelRoot.body)) {
+if (!panelRoot) throw new Error("panel root rule missing");
+if (!/--dsh-es-panel-bg:[^;]*var\(--dsw-specific-menu\)[^;]*var\(--dsw-alias-bg-base/.test(panelRoot.body)) {
     throw new Error("the panel background must lay --dsw-specific-menu over --dsw-alias-bg-base");
+}
+if (!/--dsh-es-glass-bg:\s*var\(--dsw-specific-menu/.test(panelRoot.body)) {
+    throw new Error("the glass fill must come from the host menu token");
+}
+if (!/--dsh-es-glass-blur:\s*var\(--dsw-menu-backdrop-filter,\s*blur\(40px\) saturate\(150%\)\)/.test(panelRoot.body)) {
+    throw new Error("the glass blur must follow the host menu token, falling back to the host recipe");
 }
 for (const selector of [".dsh-es-menu", ".dsh-es-modelMenu", ".dsh-es-menuItemTip"]) {
     const rule = cssRules.find((candidate) => candidate.selector.endsWith(selector));
-    if (!rule || !/background:\s*var\(--dsh-es-panel-bg\);/.test(rule.body)) throw new Error(`${selector} must use the opaque panel background`);
+    if (!rule || !/background:\s*var\(--dsh-es-panel-bg\);/.test(rule.body)) throw new Error(`${selector} must keep the opaque fallback background`);
+}
+const glassRule = cssRules.find((rule) => rule.selector.includes("@supports") && rule.selector.includes(".dsh-es-menu"));
+if (!glassRule) throw new Error("frosted glass @supports rule missing");
+for (const selector of [".dsh-es-menu", ".dsh-es-modelMenu", ".dsh-es-menuItemTip"]) {
+    if (!glassRule.selector.includes(selector)) throw new Error(`${selector} must take part in the frosted glass block`);
+}
+if (!/background:\s*var\(--dsh-es-glass-bg\);/.test(glassRule.body)) {
+    throw new Error("the glass block must paint the host's translucent menu fill");
+}
+if (!/backdrop-filter:\s*var\(--dsh-es-glass-blur\);/.test(glassRule.body)) {
+    throw new Error("the glass block must set the host's backdrop blur");
+}
+if (!/-webkit-backdrop-filter:\s*var\(--dsh-es-glass-blur\);/.test(glassRule.body)) {
+    throw new Error("the glass block must set the prefixed backdrop blur");
 }
 for (const rule of cssRules) {
     if (/(^|;)\s*background:\s*var\(--dsw-specific-menu\)/.test(rule.body)) {

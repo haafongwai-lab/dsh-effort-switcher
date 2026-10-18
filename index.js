@@ -10,12 +10,17 @@ window.__ModuleLoader__.load({
         const slotName = "conversation.input.model";
 
         const css = `
-/* Panels are opaque. DSH 0.2 makes --dsw-specific-menu a translucent glass fill
-   that the host paints over a blurred backdrop; here it would let the composer
-   show through, so the host's fill is laid over the opaque page background. On
-   hosts where the menu fill is already opaque (0.1.0) the base never shows. */
+/* Panels ship opaque so the composer never bleeds through on a host that only
+   gives a translucent fill without a backdrop to blur it (DSH 0.1.0, or a menu
+   fill that is already solid). The @supports block further down then re-enables
+   the host's own frosted glass: a translucent fill plus its backdrop filter. */
 .dsh-es-root {
     --dsh-es-panel-bg: linear-gradient(var(--dsw-specific-menu), var(--dsw-specific-menu)), var(--dsw-alias-bg-base, #fff);
+    /* DSH 0.2 defines --dsw-specific-menu as a translucent glass fill and
+       --dsw-menu-backdrop-filter as the matching blur. Both fall back to a solid
+       fill so nothing depends on tokens a host may not define. */
+    --dsh-es-glass-bg: var(--dsw-specific-menu, var(--dsw-alias-bg-base, #fff));
+    --dsh-es-glass-blur: var(--dsw-menu-backdrop-filter, blur(40px) saturate(150%));
     min-width: 0;
     position: relative;
     display: inline-flex;
@@ -223,6 +228,16 @@ window.__ModuleLoader__.load({
     line-height: 15px;
     white-space: normal;
     pointer-events: none;
+}
+/* Frosted glass, exactly where the host paints it that way: its translucent menu
+   fill plus its backdrop filter. A host with an opaque fill keeps the solid panel,
+   and so does a browser without backdrop-filter. */
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .dsh-es-menu, .dsh-es-modelMenu, .dsh-es-menuItemTip {
+        background: var(--dsh-es-glass-bg);
+        -webkit-backdrop-filter: var(--dsh-es-glass-blur);
+        backdrop-filter: var(--dsh-es-glass-blur);
+    }
 }
 /* The name owns its width; the trailing description is the only thing that
    yields when a row runs out of space, so model names are never cut short by
