@@ -92,7 +92,6 @@ host.js            Minimal Cordis host entry used by DSH loader discovery.
 cordis.patch.yml   Bundle patch that inserts the host plugin row.
 package.json       Package exports, dsh.bundle, and dsh.client manifest.
 screenshots/       README images.
-docs/desktop-test-prompt.md  Prompt for an agent to test the plugin on the Electron desktop app.
 verify-client.cjs  Node harness: renders the seat against a React shim and asserts behaviour.
 ```
 
