@@ -19,7 +19,12 @@ window.__ModuleLoader__.load({
     /* DSH 0.2 defines --dsw-specific-menu as a translucent glass fill and
        --dsw-menu-backdrop-filter as the matching blur. Both fall back to a solid
        fill so nothing depends on tokens a host may not define. */
-    --dsh-es-glass-bg: var(--dsw-specific-menu, var(--dsw-alias-bg-base, #fff));
+    --dsh-es-glass-fill: var(--dsw-specific-menu, var(--dsw-alias-bg-base, #fff));
+    /* Share of the host fill kept in the glass. The host paints its own menus at
+       100%; this seat floats over conversation content, so it reads a little more
+       see-through than that. Mixing toward transparent keeps the host's hue and
+       scales its alpha instead of inventing a color. */
+    --dsh-es-glass-mix: 70%;
     --dsh-es-glass-blur: var(--dsw-menu-backdrop-filter, blur(40px) saturate(150%));
     min-width: 0;
     position: relative;
@@ -230,11 +235,12 @@ window.__ModuleLoader__.load({
     pointer-events: none;
 }
 /* Frosted glass, exactly where the host paints it that way: its translucent menu
-   fill plus its backdrop filter. A host with an opaque fill keeps the solid panel,
-   and so does a browser without backdrop-filter. */
-@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+   fill plus its backdrop filter, then thinned toward transparent because this
+   panel floats over conversation content. A host with an opaque fill keeps the
+   solid panel, and so does a browser without either capability. */
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) and (color: color-mix(in srgb, red 50%, transparent)) {
     .dsh-es-menu, .dsh-es-modelMenu, .dsh-es-menuItemTip {
-        background: var(--dsh-es-glass-bg);
+        background: color-mix(in srgb, var(--dsh-es-glass-fill) var(--dsh-es-glass-mix), transparent);
         -webkit-backdrop-filter: var(--dsh-es-glass-blur);
         backdrop-filter: var(--dsh-es-glass-blur);
     }

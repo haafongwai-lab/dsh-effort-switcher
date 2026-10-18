@@ -350,8 +350,11 @@ if (!panelRoot) throw new Error("panel root rule missing");
 if (!/--dsh-es-panel-bg:[^;]*var\(--dsw-specific-menu\)[^;]*var\(--dsw-alias-bg-base/.test(panelRoot.body)) {
     throw new Error("the panel background must lay --dsw-specific-menu over --dsw-alias-bg-base");
 }
-if (!/--dsh-es-glass-bg:\s*var\(--dsw-specific-menu/.test(panelRoot.body)) {
-    throw new Error("the glass fill must come from the host menu token");
+if (!/--dsh-es-glass-fill:\s*var\(--dsw-specific-menu, var\(--dsw-alias-bg-base, #fff\)\)/.test(panelRoot.body)) {
+    throw new Error("the glass fill must come from the host menu token with a solid fallback");
+}
+if (!/--dsh-es-glass-mix:\s*\d+%/.test(panelRoot.body)) {
+    throw new Error("the glass must declare how much of the host fill it keeps");
 }
 if (!/--dsh-es-glass-blur:\s*var\(--dsw-menu-backdrop-filter,\s*blur\(40px\) saturate\(150%\)\)/.test(panelRoot.body)) {
     throw new Error("the glass blur must follow the host menu token, falling back to the host recipe");
@@ -362,10 +365,15 @@ for (const selector of [".dsh-es-menu", ".dsh-es-modelMenu", ".dsh-es-menuItemTi
 }
 const glassRule = cssRules.find((rule) => rule.selector.includes("@supports") && rule.selector.includes(".dsh-es-menu"));
 if (!glassRule) throw new Error("frosted glass @supports rule missing");
+// Both capabilities are needed: color-mix thins the fill, backdrop-filter blurs it.
+// A browser with only one of them keeps the solid fallback.
+if (!/color:\s*color-mix\(in srgb/.test(glassRule.selector)) {
+    throw new Error("the glass block must also require color-mix support");
+}
 for (const selector of [".dsh-es-menu", ".dsh-es-modelMenu", ".dsh-es-menuItemTip"]) {
     if (!glassRule.selector.includes(selector)) throw new Error(`${selector} must take part in the frosted glass block`);
 }
-if (!/background:\s*var\(--dsh-es-glass-bg\);/.test(glassRule.body)) {
+if (!/background:\s*color-mix\(in srgb, var\(--dsh-es-glass-fill\) var\(--dsh-es-glass-mix\), transparent\);/.test(glassRule.body)) {
     throw new Error("the glass block must paint the host's translucent menu fill");
 }
 if (!/backdrop-filter:\s*var\(--dsh-es-glass-blur\);/.test(glassRule.body)) {
