@@ -510,9 +510,40 @@ window.__ModuleLoader__.load({
             document.head.appendChild(tag);
         }
 
-        function effortIndex(levels, current) {
-            const index = levels.findIndex((level) => level.id === current);
-            return index >= 0 ? index : Math.floor((levels.length - 1) / 2);
+        // Official model-selection effort semantics
+        // (@deepseek-ai/dsh-client-ui-model-selection): the seat offers the model's
+        // declared levels, and a leading "Default" choice — which submits no
+        // reasoningEffort, leaving the provider's own default — only when the model
+        // declares no defaultEffort. A current value the levels do not name is never
+        // fabricated into a middle notch; its label falls back to the raw effort id.
+        const DEFAULT_EFFORT_LABEL = "Default";
+
+        function reasoningPositions(reasoning) {
+            const efforts = reasoning?.efforts ?? [];
+            if (efforts.length === 0) return [];
+            const positions = [];
+            if (reasoning.defaultEffort === undefined) {
+                positions.push({ kind: "default", id: "default", name: DEFAULT_EFFORT_LABEL });
+            }
+            for (const effort of efforts) {
+                positions.push({
+                    kind: "level",
+                    id: effort.id,
+                    name: effort.name ?? effort.id,
+                    description: effort.description
+                });
+            }
+            return positions;
+        }
+
+        function positionIndex(positions, effort) {
+            if (positions.length === 0) return -1;
+            if (effort === undefined) {
+                const index = positions.findIndex((position) => position.kind === "default");
+                return index >= 0 ? index : 0;
+            }
+            const index = positions.findIndex((position) => position.kind === "level" && position.id === effort);
+            return index >= 0 ? index : 0;
         }
 
         function modelKey(provider, model) {
@@ -525,13 +556,13 @@ window.__ModuleLoader__.load({
                 return IMAGE_BLOCK_REASON;
             }
             if (message.includes("does not support reasoning effort")) {
-                return "此模型不支持当前推理强度";
+                return "此模型不支持当前推理等级";
             }
             return message;
         }
 
         function explainEffortError(message) {
-            if (typeof message !== "string" || message.length === 0) return "推理强度切换失败";
+            if (typeof message !== "string" || message.length === 0) return "推理等级切换失败";
             return explainSelectionError(message);
         }
 
@@ -653,12 +684,19 @@ window.__ModuleLoader__.load({
             const currentEffort = state.current?.reasoningEffort
                 ?? currentChoice?.model.reasoning?.defaultEffort
                 ?? undefined;
-            const levels = currentChoice?.model.reasoning?.efforts ?? [];
-            const currentIndex = currentChoice === undefined ? -1 : effortIndex(levels, currentEffort);
-            const currentLevel = currentChoice === undefined ? undefined : levels[currentIndex];
-            const effortLabel = currentLevel === undefined
+            // Positions are the declared levels plus a leading "Default" notch only
+            // when the model declares no defaultEffort (official rule).
+            const positions = reasoningPositions(currentChoice?.model.reasoning);
+            const currentIndex = currentChoice === undefined ? -1 : positionIndex(positions, currentEffort);
+            // The trigger wording mirrors the official menu: an unset effort on a
+            // reasoning model reads "Default", a declared one reads its name, and a
+            // value no level names falls back to the raw effort id. A model with no
+            // levels shows no effort at all.
+            const effortLabel = currentChoice === undefined || positions.length === 0
                 ? undefined
-                : currentLevel.name ?? currentEffort;
+                : currentEffort === undefined
+                    ? DEFAULT_EFFORT_LABEL
+                    : positions.find((position) => position.kind === "level" && position.id === currentEffort)?.name ?? currentEffort;
             const modelLabel = currentChoice === undefined
                 ? "选择模型"
                 : currentChoice.model.name;
@@ -679,8 +717,16 @@ window.__ModuleLoader__.load({
             // host refuses the write, drop the pinned thumb so it shows the real
             // effort again instead of a value that never took effect.
             const submitEffort = (nextIndex) => {
-                const nextEffort = levels[nextIndex]?.id;
-                if (nextEffort === undefined || state.current === null || nextEffort === currentEffort) {
+                const nextPosition = positions[nextIndex];
+                if (nextPosition === undefined || state.current === null) {
+                    setDraft(-1);
+                    setPendingIndex(-1);
+                    return;
+                }
+                // The "Default" notch submits no reasoningEffort (provider default);
+                // a real level submits its id. An unchanged choice is a no-op.
+                const nextEffort = nextPosition.kind === "level" ? nextPosition.id : undefined;
+                if (nextEffort === currentEffort) {
                     setDraft(-1);
                     setPendingIndex(-1);
                     return;
@@ -692,7 +738,7 @@ window.__ModuleLoader__.load({
                 select({
                     provider: state.current.provider,
                     model: state.current.model,
-                    reasoningEffort: nextEffort
+                    ...nextEffort === undefined ? {} : { reasoningEffort: nextEffort }
                 }).then((accepted) => {
                     if (accepted || liveModelRef.current !== submittedKey) return;
                     setDraft(-1);
@@ -839,13 +885,13 @@ window.__ModuleLoader__.load({
             // Dragging updates only the local draft (fluid); the selection is
             // committed on release / keyboard confirm.
             const displayedIndex = draft >= 0 ? draft : pendingIndex >= 0 ? pendingIndex : currentIndex;
-            const displayedLevel = levels[displayedIndex];
-            const maxIndex = levels.length - 1;
-            const fillPct = levels.length <= 1 ? 100 : Math.round((displayedIndex / maxIndex) * 100);
-            const atMax = displayedIndex >= levels.length - 1;
+            const displayedLevel = positions[displayedIndex];
+            const maxIndex = positions.length - 1;
+            const fillPct = positions.length <= 1 ? 100 : Math.round((displayedIndex / maxIndex) * 100);
+            const atMax = displayedIndex >= positions.length - 1;
             const thumbRadius = 15;
             const travel = `calc(${fillPct}% + ${Math.round(thumbRadius - (thumbRadius * 2 * fillPct) / 100)}px)`;
-            const knobLeft = atMax || levels.length <= 1
+            const knobLeft = atMax || positions.length <= 1
                 ? `calc(100% - ${thumbRadius}px)`
                 : fillPct <= 0
                     ? `${thumbRadius}px`
@@ -856,14 +902,14 @@ window.__ModuleLoader__.load({
                 ? "0px"
                 : travel;
 
-            const slider = currentChoice !== undefined && levels.length > 0
+            const slider = currentChoice !== undefined && positions.length > 0
                 ? react.createElement(
                     "div",
                     { className: "dsh-es-sliderWrap" },
                     react.createElement(
                         "div",
                         { className: "dsh-es-sliderHead" },
-                        react.createElement("span", null, "推理强度"),
+                        react.createElement("span", null, "推理等级"),
                         react.createElement("strong", null, displayedLevel?.name ?? currentEffort)
                     ),
                     react.createElement(
@@ -890,8 +936,8 @@ window.__ModuleLoader__.load({
                         react.createElement(
                             "div",
                             { className: "dsh-es-sliderTicks", "aria-hidden": true },
-                            levels.map((level, index) => react.createElement("span", {
-                                key: level.id,
+                            positions.map((position, index) => react.createElement("span", {
+                                key: position.id,
                                 className: index <= displayedIndex ? "dsh-es-sliderTick dsh-es-sliderTickActive" : "dsh-es-sliderTick"
                             }))
                         ),
@@ -899,7 +945,7 @@ window.__ModuleLoader__.load({
                             className: "dsh-es-slider",
                             type: "range",
                             min: 0,
-                            max: Math.max(levels.length - 1, 0),
+                            max: Math.max(positions.length - 1, 0),
                             step: 1,
                             value: displayedIndex,
                             disabled: locked,
@@ -908,7 +954,7 @@ window.__ModuleLoader__.load({
                             onMouseUp: commitEffort,
                             onTouchEnd: commitEffort,
                             onKeyUp: onSliderKeyUp,
-                            "aria-label": "推理强度"
+                            "aria-label": "推理等级"
                         })
                     ),
                     displayedLevel?.description

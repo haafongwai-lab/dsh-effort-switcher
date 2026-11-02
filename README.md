@@ -1,6 +1,6 @@
 # DSH Effort Switcher
 
-把 DSH 聊天输入区的模型座位换成「模型 + 推理强度」面板：模型列表负责换模型，滑动条负责换 `reasoningEffort`，松手即写回 DSH 的 `modelDirectories`，作用于后续请求。
+把 DSH 聊天输入区的模型座位换成「模型 + 推理等级」面板：模型列表负责换模型，滑动条负责换 `reasoningEffort`，松手即写回 DSH 的 `modelDirectories`，作用于后续请求。
 
 ## 截图
 
@@ -10,11 +10,16 @@
 
 ## 行为
 
-**座位替换。** 本插件以 `priority: -100` 注册 `conversation.input.model` 座位，覆盖 DSH 自带的模型选择器。触发器并排显示模型名与当前强度（如 `DeepSeek-V4.1-Flash Max`），点击弹出面板；面板底部固定展示模型行与推理强度滑块。
+**座位替换。** 本插件以 `priority: -100` 注册 `conversation.input.model` 座位，覆盖 DSH 自带的模型选择器。触发器并排显示模型名与当前等级（如 `DeepSeek-V4.1-Flash Max`），点击弹出面板；面板底部固定展示模型行与推理等级滑块。
 
-**滑块只提交一次。** 拖动过程中只更新本地草稿，指针抬起（或方向键 `keyup`）时才向 DSH 提交一次；被接受前滑块不会回弹，被拒绝时回到真实强度并说明原因。
+**档位与官方一致。** 滑块的刻度、顺序、当前档位判定都直接取模型目录的 `reasoning.efforts` 与 `reasoning.defaultEffort`，与官方 `@deepseek-ai/dsh-client-ui-model-selection` 同源：
 
-**忙碌时不丢操作。** 模型切换进行中松手的操作会排队，等 DSH 空闲后自动补发；若期间模型已变，排队项按新模型丢弃，不会把旧模型的强度写到新模型上。
+- 当前值缺失或未被任何档位命名时，不会臆造一个「中间档」——档位名回退为原始 effort id，滑块停在真实档位上。
+- 当模型未声明 `defaultEffort`（官方会显示 `Default` 选项）时，滑块最左端会多出一档 `Default`；拖到它会以「不指定 `reasoningEffort`」提交，即交回提供方默认。
+
+**滑块只提交一次。** 拖动过程中只更新本地草稿，指针抬起（或方向键 `keyup`）时才向 DSH 提交一次；被接受前滑块不会回弹，被拒绝时回到真实等级并说明原因。
+
+**忙碌时不丢操作。** 模型切换进行中松手的操作会排队，等 DSH 空闲后自动补发；若期间模型已变，排队项按新模型丢弃，不会把旧模型的等级写到新模型上。
 
 **模型列表按需展开。** 面板里的「模型」行打开二级浮窗，按提供方分组列出目录中的模型。名称优先占宽、描述先让位，名称不会再被自己的描述挤成省略号；行悬停有完整名称提示。
 
@@ -66,7 +71,7 @@ node --input-type=module -e "const plugin=await import('dsh-effort-switcher'); c
 effort-switcher
 ```
 
-启动后选择一个支持 reasoning effort 的模型，输入区应显示「模型名 + 当前强度」触发器；点开后拖动滑块，DSH 会重新提交当前模型及新的 `reasoningEffort`。
+启动后选择一个支持 reasoning effort 的模型，输入区应显示「模型名 + 当前等级」触发器；点开后拖动滑块，DSH 会重新提交当前模型及新的 `reasoningEffort`。
 
 ## 模型角标（1017）
 
@@ -116,8 +121,9 @@ npm test        # verify-client.cjs：座位注册、滑块提交、回滚、排
 - **安装后页面未更新**：DSH 的启动图已生成；停掉旧进程后重新启动。
 - **显示的是官方模型选择器，像没装插件**：打开控制台，若有 `slot entry crashed in 'conversation.input.model'`，说明座位渲染崩溃后回退到官方选择器。DSH 0.1.2 起 `modelDirectories.directoryFor()` 会读取调用方上下文的 `remote.session`，插件必须声明它（否则报 `cannot get property "remote.session" without inject`）；本插件按宿主实际提供的服务自动声明，请更新到包含该修复的版本。
 - **双重控件或重复挂载**：删掉 profile `cordis.patch.yml` 里旧的 `effort-switcher` insert，只保留 bundle 层。
-- **拖动后未生效**：确认该模型有多个 reasoning effort 级别；只有默认强度或不支持推理的模型不会渲染滑块。
-- **滑块弹回并出现红色提示**：DSH 拒绝了这次写入（会话被占用、模型不支持该强度等）。滑块回到真实强度并给出原因，再拖一次即可重试。
+- **拖动后未生效**：确认该模型有多个 reasoning effort 级别；只有单一等级或不支持推理的模型不会渲染多档滑块。
+- **滑块弹回并出现红色提示**：DSH 拒绝了这次写入（会话被占用、模型不支持该等级等）。滑块回到真实等级并给出原因，再拖一次即可重试。
+- **模型未声明 `defaultEffort` 时最左多出一档 `Default`**：这是官方行为，选它即以「不指定 `reasoningEffort`」提交，交回提供方默认；该档不会显示在你的目录配置里，来自本插件按官方规则补齐。
 - **在模型切换进行中松开滑块**：该次选择会保留，等 DSH 空闲后自动提交，不会丢失。
 - **滑条或滑块变成圆角方块**：DSH 0.1.2 起主题给所有元素加了 `corner-shape: superellipse(1.5)`，会把 `border-radius` 的圆画成圆角方块。本插件对滑条轨道、填充、旋钮与刻度点显式使用 `corner-shape: round`，菜单与触发器仍跟随 DSH 的圆角风格。
 - **菜单毛玻璃太浓或太透**：调 `.dsh-es-root` 里的 `--dsh-es-glass-mix`。它是保留宿主填充的比例，数值越低越透（当前 70%，即 Windows 浅色主题下约 41% 不透明度、暗色约 32%）。

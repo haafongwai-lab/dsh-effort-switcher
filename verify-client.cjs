@@ -942,13 +942,13 @@ async function main() {
             label: "resolves { ok: false }",
             hostError: `session.selectModel failed: Model "x" does not support reasoning effort "high".`,
             fail: () => Promise.resolve({ ok: false, error: { message: "refused" } }),
-            message: "此模型不支持当前推理强度"
+            message: "此模型不支持当前推理等级"
         },
         {
             label: "rejects",
             hostError: null,
             fail: () => Promise.reject(new Error("boom")),
-            message: "推理强度切换失败"
+            message: "推理等级切换失败"
         },
         {
             label: "reports a plain host error",
@@ -1079,6 +1079,94 @@ async function main() {
         assert(same(declared(["remote"]), [...base, "remote"]), "must declare only the services the host provides");
         assert(same(declared([]), base), "must not declare services the host lacks");
         assert(same(declared(["remote", "remote.session"], false), base), "a context without get() must fall back to the base list");
+    }
+
+    // G. Official effort semantics: the slider is a notch slider over the declared
+    //    levels, and a leading "Default" notch appears only when the model declares
+    //    no defaultEffort. A current value the levels do not name is never
+    //    fabricated into a middle notch (the previous behaviour); the label falls
+    //    back to the raw effort id and the thumb sits on a real level.
+    {
+        // The demo model declares defaultEffort "medium", so both its trigger and
+        // panel show the selected effort; the slider stays positions.length deep. The
+        // trigger wording matches the official menu ("推理等级") and the panel drops
+        // the obsolete "推理强度" phrasing.
+        const tree = mountOpenSeat();
+        const panelText = text(tree);
+        assert(panelText.includes("推理等级"), "effort label must read 推理等级 like the official menu");
+        assert(!panelText.includes("推理强度"), "the old 推理强度 wording must be gone");
+        const head = find(tree, (n) => n.props?.className === "dsh-es-sliderHead");
+        assert(text(head).includes("低"), `panel must show the selected level's name, got ${JSON.stringify(text(head))}`);
+        const ticks = collect(tree, (n) => String(n.props?.className ?? "").split(/\s+/).includes("dsh-es-sliderTick"));
+        assert(ticks.length === 3, `demo model exposes three levels, got ${ticks.length} ticks`);
+    }
+    {
+        // A model that declares no defaultEffort and has no committed effort gets a
+        // leading "Default" notch; the label is "Default", not a fabricated middle
+        // level name, and the thumb parks on that notch (index 0).
+        let tree = mountOpenSeat();
+        snapshot.current = { provider: "demo", model: "reasoning-model", reasoningEffort: undefined };
+        const demo = snapshot.groups[0].models.find((m) => m.id === "reasoning-model");
+        const savedReasoning = demo.reasoning;
+        demo.reasoning = {
+            efforts: [
+                { id: "low", name: "低" },
+                { id: "medium", name: "中" },
+                { id: "high", name: "高" }
+            ]
+        };
+        try {
+            tree = settle();
+            const head = find(tree, (n) => n.props?.className === "dsh-es-sliderHead");
+            assert(text(head).includes("Default"), `missing defaultEffort must surface a Default notch, got ${JSON.stringify(text(head))}`);
+            const ticks = collect(tree, (n) => String(n.props?.className ?? "").split(/\s+/).includes("dsh-es-sliderTick"));
+            assert(ticks.length === 4, `Default plus three levels must be four notches, got ${ticks.length}`);
+            assert(sliderValue(tree) === 0, "an undeclared default must park the thumb on the Default notch, not a fabricated middle level");
+        } finally {
+            demo.reasoning = savedReasoning;
+        }
+    }
+    {
+        // Choosing the Default notch submits no reasoningEffort (provider default).
+        let tree = mountOpenSeat();
+        snapshot.current = { provider: "demo", model: "reasoning-model", reasoningEffort: "high" };
+        const demo = snapshot.groups[0].models.find((m) => m.id === "reasoning-model");
+        const savedReasoning = demo.reasoning;
+        demo.reasoning = {
+            efforts: [
+                { id: "low", name: "低" },
+                { id: "medium", name: "中" },
+                { id: "high", name: "高" }
+            ]
+        };
+        try {
+            tree = settle();
+            const before = directoryCalls.select.length;
+            tree = drag(tree, 0);
+            tree = release(tree, 0);
+            const sel = directoryCalls.select[directoryCalls.select.length - 1];
+            assert(directoryCalls.select.length === before + 1 && !("reasoningEffort" in sel),
+                `Default notch must submit with no reasoningEffort, got ${JSON.stringify(sel)}`);
+        } finally {
+            demo.reasoning = savedReasoning;
+        }
+    }
+    {
+        // A non-reasoning model (no levels) shows neither an effort notch nor an
+        // effort label at all — the seat collapses to the model picker, matching the
+        // official "no Effort row" rule.
+        let tree = mountOpenSeat();
+        snapshot.current = { provider: "demo", model: "reasoning-model", reasoningEffort: undefined };
+        const demo = snapshot.groups[0].models.find((m) => m.id === "reasoning-model");
+        const savedReasoning = demo.reasoning;
+        demo.reasoning = { efforts: [] };
+        try {
+            tree = settle();
+            assert(findRange(tree) === undefined, "a model with no levels must render no slider");
+            assert(snapshot.current.reasoningEffort === undefined, "non-reasoning model must not fabricate a committed effort");
+        } finally {
+            demo.reasoning = savedReasoning;
+        }
     }
 
     console.log("all checks passed");
