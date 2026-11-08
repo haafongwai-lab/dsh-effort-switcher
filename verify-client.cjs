@@ -416,9 +416,10 @@ if (!/var\(--dsw-static-deepseek-100/.test(modelBadgeRule.body)) {
 if (!/flex:\s*none/.test(modelBadgeRule.body)) {
     throw new Error("the 1017 badge must never be squeezed by a long name");
 }
-const modelItemDescRule = cssRules.find((rule) => rule.selector === ".dsh-es-menuItemDesc");
-if (!modelItemDescRule || !/flex:\s*1 1 0/.test(modelItemDescRule.body)) {
-    throw new Error("the description must absorb the row's shrink instead of the model name");
+// Model rows are name-only now: the long grey description that used to trail
+// each name must not render and must not have a style rule kept around for it.
+if (cssRules.some((rule) => rule.selector === ".dsh-es-menuItemDesc")) {
+    throw new Error("the removed model description must not leave a css rule behind");
 }
 // The trigger and menu keep following the host's corner style.
 for (const rule of cssRules) {
@@ -609,6 +610,9 @@ if (text(modelNameSpan) !== "DeepSeek-V4-Flash") {
 }
 if (deepseekItem.children.some((child) => child?.props?.className === "dsh-es-triggerLabel")) {
     throw new Error("model items must not reuse the shrinking trigger label class");
+}
+if (find(deepseekItem, (n) => n.props?.className === "dsh-es-menuItemDesc")) {
+    throw new Error("model rows must not render a trailing description");
 }
 if (!String(deepseekItem.props.title ?? "").includes("DeepSeek-V4-Flash")) {
     throw new Error("model item must expose the full name as a tooltip");

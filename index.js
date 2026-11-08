@@ -245,10 +245,9 @@ window.__ModuleLoader__.load({
         backdrop-filter: var(--dsh-es-glass-blur);
     }
 }
-/* The name owns its width; the trailing description is the only thing that
-   yields when a row runs out of space, so model names are never cut short by
-   their own description (flex-basis 0 means the description also collapses
-   before the name ellipsizes). */
+/* Model rows are name-only: no trailing description text. The name owns the
+   row's free width and ellipsizes only when the name alone is wider than the
+   window. */
 .dsh-es-menuItemName {
     align-items: center;
     gap: 4px;
@@ -274,16 +273,6 @@ window.__ModuleLoader__.load({
     font-size: 10px;
     font-weight: 500;
     line-height: 14px;
-}
-.dsh-es-menuItemDesc {
-    color: var(--dsw-alias-label-caption);
-    font-size: 11px;
-    line-height: 15px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-    flex: 1 1 0;
-    overflow: hidden;
 }
 .dsh-es-menuStatus, .dsh-es-menuEmpty {
     color: var(--dsw-alias-label-tertiary);
@@ -874,9 +863,7 @@ window.__ModuleLoader__.load({
                                         },
                                         warningIcon()
                                     )
-                                    : model.description !== void 0
-                                        ? react.createElement("span", { className: "dsh-es-menuItemDesc" }, model.description)
-                                        : null
+                                    : null
                             );
                         })
                     ));
